@@ -59,9 +59,7 @@ export async function fetchAndStoreApifyJobs(): Promise<number> {
 
   // Build one URL per search and pass them all in a single actor run.
   // Running once with multiple URLs is cheaper than one run per search.
-  const urls = LINKEDIN_SEARCHES.map((s) => ({
-    url: buildLinkedInUrl(s.keywords, s.location),
-  }));
+  const urls = LINKEDIN_SEARCHES.map((s) => buildLinkedInUrl(s.keywords, s.location));
 
   let items: ApifyRawJob[];
 
