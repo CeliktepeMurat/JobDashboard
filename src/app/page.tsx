@@ -1,65 +1,120 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState, useMemo } from "react";
+import type { JobWithApplication } from "@/types";
+import JobCard from "@/components/JobCard";
+import JobFilters, { type SourceFilter } from "@/components/JobFilters";
 
-export default function Home() {
+export default function FeedPage() {
+  const [jobs, setJobs] = useState<JobWithApplication[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [keyword, setKeyword] = useState("");
+  const [source, setSource] = useState<SourceFilter>("ALL");
+  const [appliedOnly, setAppliedOnly] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/jobs")
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load jobs");
+        return r.json();
+      })
+      .then(setJobs)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Client-side filtering — the full list is already cached in state
+  const filtered = useMemo(() => {
+    return jobs.filter((job) => {
+      if (source !== "ALL" && job.source !== source) return false;
+      if (appliedOnly && !job.application) return false;
+      if (keyword) {
+        const q = keyword.toLowerCase();
+        if (
+          !job.title.toLowerCase().includes(q) &&
+          !job.company.toLowerCase().includes(q) &&
+          !(job.description ?? "").toLowerCase().includes(q)
+        )
+          return false;
+      }
+      return true;
+    });
+  }, [jobs, source, appliedOnly, keyword]);
+
+  function handleApplicationChange(
+    jobId: string,
+    application: JobWithApplication["application"]
+  ) {
+    setJobs((prev) =>
+      prev.map((j) => (j.id === jobId ? { ...j, application } : j))
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-semibold text-zinc-900">Job Feed</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            {loading ? "Loading…" : `${filtered.length} of ${jobs.length} jobs`}
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <a
+          href="/tracker"
+          className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors"
+        >
+          View tracker →
+        </a>
+      </div>
+
+      <JobFilters
+        keyword={keyword}
+        source={source}
+        appliedOnly={appliedOnly}
+        onKeyword={setKeyword}
+        onSource={setSource}
+        onAppliedOnly={setAppliedOnly}
+      />
+
+      {error && (
+        <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md px-4 py-3">
+          {error}
         </div>
-      </main>
+      )}
+
+      {loading && (
+        <div className="text-zinc-400 text-sm text-center py-16">
+          Loading jobs…
+        </div>
+      )}
+
+      {!loading && !error && jobs.length === 0 && (
+        <div className="text-center py-16 text-zinc-400">
+          <p className="text-sm">No jobs in the database yet.</p>
+          <p className="text-xs mt-2">
+            Trigger a fetch by calling{" "}
+            <code className="bg-zinc-100 px-1 rounded">POST /api/fetch-jobs</code>{" "}
+            with your <code className="bg-zinc-100 px-1 rounded">CRON_SECRET</code>.
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && jobs.length > 0 && filtered.length === 0 && (
+        <div className="text-center py-16 text-zinc-400 text-sm">
+          No jobs match your filters.
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3">
+        {filtered.map((job) => (
+          <JobCard
+            key={job.id}
+            job={job}
+            onApplicationChange={handleApplicationChange}
+          />
+        ))}
+      </div>
     </div>
   );
 }

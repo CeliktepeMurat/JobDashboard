@@ -1,19 +1,38 @@
-// POST /api/fetch-jobs — triggered by Vercel Cron (or manually) to fetch fresh jobs
-// from SerpApi and Apify, then upsert them into the DB.
-// This route is protected — only called server-side via cron, not from the browser.
-import { NextRequest, NextResponse } from "next/server";
+// POST /api/fetch-jobs
+// Triggered daily by Vercel Cron (see vercel.json) or manually via POST request.
+// Runs both fetchers (SerpApi + Apify) and upserts results into the DB.
+//
+// Cron auth: Vercel sets an Authorization: Bearer <CRON_SECRET> header on cron
+// invocations. We check this so the endpoint isn't callable by anyone on the internet.
+// For manual triggering during development: pass the same header yourself.
 
-// TODO: import serpapi and apify fetchers once implemented
-// import { fetchSerpApiJobs } from "@/lib/fetchers/serpapi";
-// import { fetchApifyJobs } from "@/lib/fetchers/apify";
+import { NextRequest, NextResponse } from "next/server";
+import { fetchAndStoreSerpApiJobs } from "@/lib/fetchers/serpapi";
+import { fetchAndStoreApifyJobs } from "@/lib/fetchers/apify";
 
 export async function POST(request: NextRequest) {
-  // Verify the request comes from Vercel Cron (or our own secret)
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // TODO: call fetchers and upsert results once implemented
-  return NextResponse.json({ message: "fetch-jobs endpoint ready — fetchers not yet wired" });
+  const results = { serpapi: 0, apify: 0, errors: [] as string[] };
+
+  try {
+    results.serpapi = await fetchAndStoreSerpApiJobs();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    results.errors.push(`SerpApi: ${msg}`);
+  }
+
+  try {
+    results.apify = await fetchAndStoreApifyJobs();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    results.errors.push(`Apify: ${msg}`);
+  }
+
+  return NextResponse.json(results, {
+    status: results.errors.length > 0 ? 207 : 200,
+  });
 }

@@ -1,8 +1,17 @@
-// POST /api/applications — mark a job as applied (creates an Application record)
-// PATCH /api/applications — update status/notes on an existing application
+// POST  /api/applications — mark a job as applied
+// PATCH /api/applications — update status or notes on an existing application
+// GET   /api/applications — list all applications (with job data included)
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { ApplicationStatus } from "@/types";
+
+export async function GET() {
+  const applications = await prisma.application.findMany({
+    include: { job: true },
+    orderBy: { appliedAt: "desc" },
+  });
+  return NextResponse.json(applications);
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -35,7 +44,10 @@ export async function PATCH(request: NextRequest) {
 
   const application = await prisma.application.update({
     where: { id },
-    data: { ...(status ? { status } : {}), ...(notes !== undefined ? { notes } : {}) },
+    data: {
+      ...(status ? { status } : {}),
+      ...(notes !== undefined ? { notes } : {}),
+    },
   });
 
   return NextResponse.json(application);
