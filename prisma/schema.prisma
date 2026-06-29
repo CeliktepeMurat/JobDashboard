@@ -1,0 +1,73 @@
+// Prisma schema for the Job Aggregator & Tracker
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Represents a job listing fetched from SerpApi (Google Jobs) or Apify (LinkedIn)
+model Job {
+  id          String   @id @default(cuid())
+  externalId  String   @unique // ID from the source API to avoid duplicates
+  title       String
+  company     String
+  location    String?
+  description String?
+  url         String
+  source      JobSource
+  postedAt    DateTime?
+  fetchedAt   DateTime @default(now())
+
+  application Application?
+
+  @@index([source])
+  @@index([fetchedAt])
+}
+
+// Represents a tracked application from the automated feed (linked to a Job)
+model Application {
+  id          String            @id @default(cuid())
+  jobId       String            @unique
+  job         Job               @relation(fields: [jobId], references: [id])
+  status      ApplicationStatus @default(APPLIED)
+  appliedAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  notes       String?
+
+  @@index([status])
+  @@index([appliedAt])
+}
+
+// Represents a manually added job (from Indeed, Wellfound, Kariyer.net, company sites, etc.)
+model ManualApplication {
+  id        String            @id @default(cuid())
+  company   String
+  role      String
+  platform  String            // e.g. "Indeed", "Wellfound", "Kariyer.net", "Company Site"
+  url       String?
+  status    ApplicationStatus @default(APPLIED)
+  appliedAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  notes     String?
+
+  @@index([status])
+  @@index([appliedAt])
+}
+
+enum JobSource {
+  SERPAPI   // Google Jobs via SerpApi (international remote roles)
+  APIFY     // LinkedIn via Apify scraper
+}
+
+enum ApplicationStatus {
+  APPLIED
+  FOLLOWED_UP
+  INTERVIEWING
+  REJECTED
+  OFFER
+}
