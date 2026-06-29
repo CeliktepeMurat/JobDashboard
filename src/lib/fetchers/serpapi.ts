@@ -44,7 +44,11 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
         engine: "google_jobs",
         q: query,
         location: "United States",
-        chips: "work_from_home:1", // remote only — per Job Search Preferences
+        chips: "date_posted:today,work_from_home:1", // today + remote only
+        // Note: Google Jobs has no exact "last 24h" filter. "date_posted:today"
+        // means since midnight UTC — so a run at 07:00 UTC only sees 7 hours of
+        // results. This is the closest Google Jobs supports. upsert means no
+        // duplicates if a job appeared in a previous day's run too.
         api_key: apiKey,
         hl: "en",
       });
