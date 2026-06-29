@@ -21,6 +21,7 @@ export interface JobWithApplication {
   source: JobSource;
   postedAt: string | null;
   fetchedAt: string;
+  relevanceScore: number;
   application: {
     id: string;
     status: ApplicationStatus;

@@ -1,24 +1,23 @@
 // Fetches remote job listings from SerpApi using the Google Jobs engine.
 //
-// Why location: "United States"?
-// Google Jobs has almost zero coverage for Turkey, so SerpApi is used purely
-// for international remote roles. Passing "United States" as the location
-// forces Google Jobs to return the broadest international remote listings
-// regardless of where the user is physically located.
+// Per CLAUDE.md Job Search Preferences:
+//   Keywords:  "blockchain developer", "full stack developer", "software engineer"
+//   Workplace: Remote only (chips: "work_from_home:1" — keeps "remote" out of
+//              the keyword so results aren't artificially narrowed by phrasing)
+//   Location:  United States — used as a proxy for the full international remote
+//              pool; Google Jobs returns almost nothing for Turkey-based queries
 //
-// This module is server-side only — SERPAPI_KEY must never reach the browser.
+// Each query costs 1 SerpApi credit. Free tier: 250/month.
+// 3 queries × ~30 days = 90 credits/month, well within the free tier.
 
 import { getJson } from "serpapi";
 import { prisma } from "@/lib/prisma";
+import { scoreJob } from "@/lib/scoring";
 
-// Queries to run. Each costs 1 SerpApi credit (free tier: 250/month).
-// Keep this list short to stay within the free tier.
 const QUERIES = [
-  "software engineer remote",
-  "full stack developer remote",
-  "frontend developer remote",
-  "backend developer remote",
-  "blockchain developer remote",
+  "blockchain developer",
+  "full stack developer",
+  "software engineer",
 ];
 
 interface SerpApiJob {
@@ -27,9 +26,7 @@ interface SerpApiJob {
   company_name: string;
   location: string;
   description: string;
-  detected_extensions?: {
-    posted_at?: string;
-  };
+  detected_extensions?: { posted_at?: string };
   apply_options?: { title: string; link: string }[];
 }
 
@@ -47,6 +44,7 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
         engine: "google_jobs",
         q: query,
         location: "United States",
+        chips: "work_from_home:1", // remote only — per Job Search Preferences
         api_key: apiKey,
         hl: "en",
       });
@@ -54,22 +52,19 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
       results = (data.jobs_results as SerpApiJob[] | undefined) ?? [];
     } catch (err) {
       console.error(`SerpApi error for query "${query}":`, err);
-      continue; // skip this query, try the next
+      continue;
     }
 
     for (const job of results) {
-      // Validate the minimum required fields before saving
       if (!job.job_id || !job.title || !job.company_name) continue;
 
-      // Best-effort: grab the first apply link, fall back to a search URL
       const url =
         job.apply_options?.[0]?.link ??
         `https://www.google.com/search?q=${encodeURIComponent(job.title + " " + job.company_name)}`;
 
-      // Parse posted_at ("3 days ago", "today", etc.) — stored as a string hint,
-      // not a precise timestamp, because SerpApi doesn't give exact dates.
       const postedAtRaw = job.detected_extensions?.posted_at;
       const postedAt = postedAtRaw ? parseSerpApiDate(postedAtRaw) : null;
+      const relevanceScore = scoreJob(job.title, job.description ?? null);
 
       await prisma.job.upsert({
         where: { externalId: job.job_id },
@@ -82,6 +77,7 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
           url,
           source: "SERPAPI",
           postedAt,
+          relevanceScore,
         },
         update: {
           title: job.title,
@@ -90,6 +86,7 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
           description: job.description ?? null,
           url,
           postedAt,
+          relevanceScore,
         },
       });
 
@@ -100,9 +97,8 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
   return totalUpserted;
 }
 
-// Converts SerpApi's relative date strings ("3 days ago", "today", "2 hours ago")
-// into a Date object by working backwards from now.
-// Returns null if the format isn't recognized rather than throwing.
+// Converts SerpApi's relative date strings ("3 days ago", "today", etc.)
+// into a Date by subtracting from now. Returns null for unrecognised formats.
 function parseSerpApiDate(raw: string): Date | null {
   const now = new Date();
   const s = raw.toLowerCase().trim();
@@ -113,12 +109,12 @@ function parseSerpApiDate(raw: string): Date | null {
   if (!match) return null;
 
   const amount = parseInt(match[1], 10);
-  const unit = match[2];
+  const unit   = match[2];
   const result = new Date(now);
 
-  if (unit === "hour") result.setHours(result.getHours() - amount);
-  else if (unit === "day") result.setDate(result.getDate() - amount);
-  else if (unit === "week") result.setDate(result.getDate() - amount * 7);
+  if      (unit === "hour")  result.setHours(result.getHours() - amount);
+  else if (unit === "day")   result.setDate(result.getDate() - amount);
+  else if (unit === "week")  result.setDate(result.getDate() - amount * 7);
   else if (unit === "month") result.setMonth(result.getMonth() - amount);
 
   return result;

@@ -1,19 +1,22 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import type { JobWithApplication } from "@/types";
+import { relevanceLabel } from "@/lib/scoring";
 import JobCard from "@/components/JobCard";
-import JobFilters, { type SourceFilter } from "@/components/JobFilters";
+import JobFilters, { type SourceFilter, type RelevanceFilter, type SortOrder } from "@/components/JobFilters";
 
 export default function FeedPage() {
-  const [jobs, setJobs]       = useState<JobWithApplication[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+  const [jobs, setJobs]         = useState<JobWithApplication[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
   const [fetchResult, setFetchResult] = useState<string | null>(null);
 
   const [keyword,     setKeyword]     = useState("");
   const [source,      setSource]      = useState<SourceFilter>("ALL");
   const [appliedOnly, setAppliedOnly] = useState(false);
+  const [relevance,   setRelevance]   = useState<RelevanceFilter>("ALL");
+  const [sort,        setSort]        = useState<SortOrder>("newest");
 
   function loadJobs() {
     setLoading(true);
@@ -30,7 +33,7 @@ export default function FeedPage() {
     setFetching(true);
     setFetchResult(null);
     try {
-      const res = await fetch("/api/fetch-jobs", { method: "POST" });
+      const res  = await fetch("/api/fetch-jobs", { method: "POST" });
       const data = await res.json();
       if (data.errors?.length) {
         setFetchResult(`Done with errors: ${data.errors.join(", ")}`);
@@ -46,9 +49,11 @@ export default function FeedPage() {
   }
 
   const filtered = useMemo(() => {
-    return jobs.filter((job) => {
+    let list = jobs.filter((job) => {
       if (source !== "ALL" && job.source !== source) return false;
       if (appliedOnly && !job.application) return false;
+      if (relevance === "HIGH"         && relevanceLabel(job.relevanceScore) !== "High")   return false;
+      if (relevance === "MEDIUM_PLUS"  && relevanceLabel(job.relevanceScore) === "Low")    return false;
       if (keyword) {
         const q = keyword.toLowerCase();
         if (
@@ -59,7 +64,14 @@ export default function FeedPage() {
       }
       return true;
     });
-  }, [jobs, source, appliedOnly, keyword]);
+
+    if (sort === "relevance") {
+      list = [...list].sort((a, b) => b.relevanceScore - a.relevanceScore);
+    }
+    // "newest" order is already set by the API (orderBy fetchedAt desc)
+
+    return list;
+  }, [jobs, source, appliedOnly, relevance, sort, keyword]);
 
   function handleApplicationChange(jobId: string, application: JobWithApplication["application"]) {
     setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, application } : j)));
@@ -82,9 +94,7 @@ export default function FeedPage() {
           >
             {fetching ? "Fetching…" : "Fetch Jobs"}
           </button>
-          {fetchResult && (
-            <p className="text-xs text-slate-500">{fetchResult}</p>
-          )}
+          {fetchResult && <p className="text-xs text-slate-500">{fetchResult}</p>}
         </div>
       </div>
 
@@ -92,9 +102,13 @@ export default function FeedPage() {
         keyword={keyword}
         source={source}
         appliedOnly={appliedOnly}
+        relevance={relevance}
+        sort={sort}
         onKeyword={setKeyword}
         onSource={setSource}
         onAppliedOnly={setAppliedOnly}
+        onRelevance={setRelevance}
+        onSort={setSort}
       />
 
       {error && (
@@ -103,21 +117,19 @@ export default function FeedPage() {
         </div>
       )}
 
-      {loading && (
-        <div className="text-slate-400 text-sm text-center py-16">Loading jobs…</div>
-      )}
+      {loading && <div className="text-slate-400 text-sm text-center py-16">Loading jobs…</div>}
 
       {!loading && !error && jobs.length === 0 && (
         <div className="text-center py-16 text-slate-400">
           <p className="text-sm font-medium">No jobs yet.</p>
-          <p className="text-xs mt-2">Click <span className="font-semibold text-slate-500">Fetch Jobs</span> to pull listings from SerpApi and LinkedIn.</p>
+          <p className="text-xs mt-2">
+            Click <span className="font-semibold text-slate-500">Fetch Jobs</span> to pull listings from SerpApi and LinkedIn.
+          </p>
         </div>
       )}
 
       {!loading && !error && jobs.length > 0 && filtered.length === 0 && (
-        <div className="text-center py-16 text-slate-400 text-sm">
-          No jobs match your filters.
-        </div>
+        <div className="text-center py-16 text-slate-400 text-sm">No jobs match your filters.</div>
       )}
 
       <div className="flex flex-col gap-3">

@@ -19,9 +19,10 @@ model Job {
   location    String?
   description String?
   url         String
-  source      JobSource
-  postedAt    DateTime?
-  fetchedAt   DateTime @default(now())
+  source          JobSource
+  postedAt        DateTime?
+  fetchedAt       DateTime  @default(now())
+  relevanceScore  Int       @default(0)
 
   application Application?
 

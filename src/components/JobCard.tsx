@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { JobWithApplication, ApplicationStatus } from "@/types";
+import { relevanceLabel } from "@/lib/scoring";
 import StatusBadge from "./StatusBadge";
 import StatusSelect from "./StatusSelect";
 
@@ -9,14 +10,17 @@ interface Props {
   onApplicationChange: (jobId: string, application: JobWithApplication["application"]) => void;
 }
 
-const sourceLabel: Record<string, string> = {
-  SERPAPI: "Remote",
-  APIFY:   "LinkedIn",
-};
+const sourceLabel: Record<string, string> = { SERPAPI: "Remote", APIFY: "LinkedIn" };
 
 const sourceBadge: Record<string, string> = {
   SERPAPI: "bg-orange-50 text-orange-600 ring-1 ring-orange-200",
   APIFY:   "bg-sky-50 text-sky-600 ring-1 ring-sky-200",
+};
+
+const relevanceBadge: Record<string, string> = {
+  High:   "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200",
+  Medium: "bg-blue-50 text-blue-500 ring-1 ring-blue-200",
+  Low:    "bg-slate-50 text-slate-400 ring-1 ring-slate-200",
 };
 
 export default function JobCard({ job, onApplicationChange }: Props) {
@@ -32,8 +36,7 @@ export default function JobCard({ job, onApplicationChange }: Props) {
         body: JSON.stringify({ jobId: job.id }),
       });
       if (!res.ok) throw new Error("Failed to mark as applied");
-      const application = await res.json();
-      onApplicationChange(job.id, application);
+      onApplicationChange(job.id, await res.json());
     } catch (err) {
       alert(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -51,8 +54,7 @@ export default function JobCard({ job, onApplicationChange }: Props) {
         body: JSON.stringify({ id: job.application.id, status }),
       });
       if (!res.ok) throw new Error("Failed to update status");
-      const application = await res.json();
-      onApplicationChange(job.id, application);
+      onApplicationChange(job.id, await res.json());
     } finally {
       setLoading(false);
     }
@@ -61,6 +63,8 @@ export default function JobCard({ job, onApplicationChange }: Props) {
   const postedLabel = job.postedAt
     ? new Date(job.postedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
     : null;
+
+  const relLabel = relevanceLabel(job.relevanceScore);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3 hover:shadow-md hover:border-slate-200 transition-all">
@@ -81,9 +85,15 @@ export default function JobCard({ job, onApplicationChange }: Props) {
             {postedLabel && <><span>·</span><span>{postedLabel}</span></>}
           </div>
         </div>
-        <span className={`shrink-0 text-xs font-medium px-2.5 py-0.5 rounded-full ${sourceBadge[job.source] ?? "bg-slate-100 text-slate-600"}`}>
-          {sourceLabel[job.source] ?? job.source}
-        </span>
+        {/* Source + Relevance badges */}
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+          <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${relevanceBadge[relLabel]}`}>
+            {relLabel} match
+          </span>
+          <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${sourceBadge[job.source] ?? "bg-slate-100 text-slate-600"}`}>
+            {sourceLabel[job.source] ?? job.source}
+          </span>
+        </div>
       </div>
 
       {/* Description */}
