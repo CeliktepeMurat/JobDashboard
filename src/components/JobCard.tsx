@@ -10,17 +10,17 @@ interface Props {
 }
 
 const sourceLabel: Record<string, string> = {
-  SERPAPI: "Remote (Google)",
-  APIFY: "LinkedIn",
+  SERPAPI: "Remote",
+  APIFY:   "LinkedIn",
 };
 
 const sourceBadge: Record<string, string> = {
-  SERPAPI: "bg-orange-100 text-orange-700",
-  APIFY: "bg-sky-100 text-sky-700",
+  SERPAPI: "bg-orange-50 text-orange-600 ring-1 ring-orange-200",
+  APIFY:   "bg-sky-50 text-sky-600 ring-1 ring-sky-200",
 };
 
 export default function JobCard({ job, onApplicationChange }: Props) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]   = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   async function markApplied() {
@@ -59,47 +59,29 @@ export default function JobCard({ job, onApplicationChange }: Props) {
   }
 
   const postedLabel = job.postedAt
-    ? new Date(job.postedAt).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
+    ? new Date(job.postedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
     : null;
 
   return (
-    <div className="bg-white border border-zinc-200 rounded-lg p-4 flex flex-col gap-3 hover:border-zinc-300 transition-colors">
-      {/* Header row */}
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3 hover:shadow-md hover:border-slate-200 transition-all">
+      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <a
             href={job.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-zinc-900 hover:text-blue-600 transition-colors line-clamp-1"
+            className="font-semibold text-slate-800 hover:text-blue-600 transition-colors line-clamp-1"
           >
             {job.title}
           </a>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap text-sm text-zinc-500">
-            <span>{job.company}</span>
-            {job.location && (
-              <>
-                <span>·</span>
-                <span>{job.location}</span>
-              </>
-            )}
-            {postedLabel && (
-              <>
-                <span>·</span>
-                <span>{postedLabel}</span>
-              </>
-            )}
+          <div className="flex items-center gap-2 mt-1 flex-wrap text-sm text-slate-500">
+            <span className="font-medium text-slate-600">{job.company}</span>
+            {job.location && <><span>·</span><span>{job.location}</span></>}
+            {postedLabel && <><span>·</span><span>{postedLabel}</span></>}
           </div>
         </div>
-
-        {/* Source badge */}
-        <span
-          className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded ${sourceBadge[job.source] ?? "bg-zinc-100 text-zinc-600"}`}
-        >
+        <span className={`shrink-0 text-xs font-medium px-2.5 py-0.5 rounded-full ${sourceBadge[job.source] ?? "bg-slate-100 text-slate-600"}`}>
           {sourceLabel[job.source] ?? job.source}
         </span>
       </div>
@@ -107,13 +89,13 @@ export default function JobCard({ job, onApplicationChange }: Props) {
       {/* Description */}
       {job.description && (
         <div>
-          <p className={`text-sm text-zinc-600 leading-relaxed ${expanded ? "" : "line-clamp-3"}`}>
+          <p className={`text-sm text-slate-500 leading-relaxed ${expanded ? "" : "line-clamp-3"}`}>
             {job.description}
           </p>
           {job.description.length > 200 && (
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="text-xs text-zinc-400 hover:text-zinc-600 mt-1"
+              className="text-xs text-slate-400 hover:text-blue-500 mt-1 transition-colors"
             >
               {expanded ? "Show less" : "Show more"}
             </button>
@@ -121,8 +103,8 @@ export default function JobCard({ job, onApplicationChange }: Props) {
         </div>
       )}
 
-      {/* Action row */}
-      <div className="flex items-center justify-between gap-3 pt-1 border-t border-zinc-100">
+      {/* Actions */}
+      <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
         {job.application ? (
           <div className="flex items-center gap-2">
             <StatusBadge status={job.application.status as ApplicationStatus} />
@@ -136,17 +118,16 @@ export default function JobCard({ job, onApplicationChange }: Props) {
           <button
             onClick={markApplied}
             disabled={loading}
-            className="text-sm font-medium px-3 py-1.5 rounded bg-zinc-900 text-white hover:bg-zinc-700 transition-colors disabled:opacity-50"
+            className="text-sm font-medium px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             {loading ? "Saving…" : "Mark as Applied"}
           </button>
         )}
-
         <a
           href={job.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors"
+          className="text-sm text-slate-400 hover:text-blue-500 transition-colors"
         >
           View job →
         </a>

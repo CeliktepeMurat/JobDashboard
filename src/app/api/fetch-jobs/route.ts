@@ -1,19 +1,22 @@
 // POST /api/fetch-jobs
 // Triggered daily by Vercel Cron (see vercel.json) or manually via POST request.
-// Runs both fetchers (SerpApi + Apify) and upserts results into the DB.
 //
-// Cron auth: Vercel sets an Authorization: Bearer <CRON_SECRET> header on cron
-// invocations. We check this so the endpoint isn't callable by anyone on the internet.
-// For manual triggering during development: pass the same header yourself.
+// Auth: In production, Vercel Cron sends Authorization: Bearer <CRON_SECRET>.
+// In development (NODE_ENV !== "production"), auth is skipped so you can trigger
+// the fetch from the UI or curl without needing a secret configured.
 
 import { NextRequest, NextResponse } from "next/server";
 import { fetchAndStoreSerpApiJobs } from "@/lib/fetchers/serpapi";
 import { fetchAndStoreApifyJobs } from "@/lib/fetchers/apify";
 
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const isDev = process.env.NODE_ENV !== "production";
+
+  if (!isDev) {
+    const authHeader = request.headers.get("authorization");
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const results = { serpapi: 0, apify: 0, errors: [] as string[] };

@@ -1,26 +1,24 @@
 import type { ApplicationStatus } from "@/types";
 
 const styles: Record<ApplicationStatus, string> = {
-  APPLIED: "bg-blue-100 text-blue-700",
-  FOLLOWED_UP: "bg-yellow-100 text-yellow-700",
-  INTERVIEWING: "bg-purple-100 text-purple-700",
-  REJECTED: "bg-red-100 text-red-600",
-  OFFER: "bg-green-100 text-green-700",
+  APPLIED:      "bg-blue-50 text-blue-600 ring-1 ring-blue-200",
+  FOLLOWED_UP:  "bg-amber-50 text-amber-600 ring-1 ring-amber-200",
+  INTERVIEWING: "bg-violet-50 text-violet-600 ring-1 ring-violet-200",
+  REJECTED:     "bg-red-50 text-red-500 ring-1 ring-red-200",
+  OFFER:        "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200",
 };
 
 const labels: Record<ApplicationStatus, string> = {
-  APPLIED: "Applied",
-  FOLLOWED_UP: "Followed Up",
+  APPLIED:      "Applied",
+  FOLLOWED_UP:  "Followed Up",
   INTERVIEWING: "Interviewing",
-  REJECTED: "Rejected",
-  OFFER: "Offer",
+  REJECTED:     "Rejected",
+  OFFER:        "Offer",
 };
 
 export default function StatusBadge({ status }: { status: ApplicationStatus }) {
   return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[status]}`}
-    >
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[status]}`}>
       {labels[status]}
     </span>
   );

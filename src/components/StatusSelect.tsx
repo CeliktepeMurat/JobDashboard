@@ -10,11 +10,11 @@ const OPTIONS: ApplicationStatus[] = [
 ];
 
 const labels: Record<ApplicationStatus, string> = {
-  APPLIED: "Applied",
-  FOLLOWED_UP: "Followed Up",
+  APPLIED:      "Applied",
+  FOLLOWED_UP:  "Followed Up",
   INTERVIEWING: "Interviewing",
-  REJECTED: "Rejected",
-  OFFER: "Offer",
+  REJECTED:     "Rejected",
+  OFFER:        "Offer",
 };
 
 interface Props {
@@ -29,12 +29,10 @@ export default function StatusSelect({ value, onChange, disabled }: Props) {
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as ApplicationStatus)}
-      className="text-sm border border-zinc-200 rounded px-2 py-1 bg-white text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:opacity-50"
+      className="text-sm border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
     >
       {OPTIONS.map((s) => (
-        <option key={s} value={s}>
-          {labels[s]}
-        </option>
+        <option key={s} value={s}>{labels[s]}</option>
       ))}
     </select>
   );

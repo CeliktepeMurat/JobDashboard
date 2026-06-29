@@ -12,9 +12,9 @@ export default function Nav() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-zinc-200 bg-white">
+    <header className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-10">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-        <span className="font-semibold text-zinc-900 tracking-tight">
+        <span className="font-semibold text-slate-800 tracking-tight">
           Job Dashboard
         </span>
         <nav className="flex items-center gap-1">
@@ -24,8 +24,8 @@ export default function Nav() {
               href={l.href}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 pathname === l.href
-                  ? "bg-zinc-900 text-white"
-                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
               }`}
             >
               {l.label}
