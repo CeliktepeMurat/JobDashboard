@@ -1,35 +1,36 @@
-// Fetches LinkedIn job listings via an Apify actor.
+// Fetches LinkedIn job listings via the curious_coder/linkedin-jobs-scraper Apify actor.
 //
-// Why Apify for LinkedIn?
-// LinkedIn doesn't offer a public jobs API, so a scraper actor on Apify is
-// the practical way to get LinkedIn listings programmatically. Apify runs
-// the scraper in the cloud and returns structured data — we just trigger
-// the actor and wait for the dataset.
+// This actor doesn't accept keyword/location text directly — it takes LinkedIn
+// job search URLs. We build the URLs ourselves using LinkedIn's public search
+// query parameters, then pass them as the `urls` array input the actor expects.
 //
-// Which actor?
-// Set APIFY_ACTOR_ID in .env to your chosen LinkedIn scraper actor ID,
-// e.g. "curious_coder/linkedin-jobs-scraper". The actor's input schema
-// varies, so we send a general-purpose input that works with most LinkedIn
-// scraper actors on Apify.
-//
-// This module is server-side only — APIFY_TOKEN must never reach the browser.
+// LinkedIn search URL params used:
+//   keywords  — job title / search term
+//   location  — city, country, or "Worldwide"
+//   f_WT=2    — work type: remote only
+//   f_TPR=r86400 — posted in the last 24 hours (keeps results fresh)
 
 import { ApifyClient } from "apify-client";
 import { prisma } from "@/lib/prisma";
 
-// Search configurations for LinkedIn.
-// Covers both Turkey-based and global remote roles.
 const LINKEDIN_SEARCHES = [
-  { keywords: "software engineer", location: "Turkey" },
+  { keywords: "software engineer",   location: "Turkey" },
   { keywords: "full stack developer", location: "Turkey" },
   { keywords: "blockchain developer", location: "Worldwide" },
   { keywords: "remote software engineer", location: "Worldwide" },
 ];
 
-// Apify actors return different field names depending on the actor.
-// This interface covers the most common LinkedIn scraper shapes.
+function buildLinkedInUrl(keywords: string, location: string): string {
+  const params = new URLSearchParams({
+    keywords,
+    location,
+    f_WT: "2",       // remote only
+    f_TPR: "r86400", // last 24 hours
+  });
+  return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
+}
+
 interface ApifyRawJob {
-  // curious_coder/linkedin-jobs-scraper shape
   id?: string;
   jobId?: string;
   title?: string;
@@ -48,85 +49,60 @@ interface ApifyRawJob {
 }
 
 export async function fetchAndStoreApifyJobs(): Promise<number> {
-  const token = process.env.APIFY_TOKEN;
+  const token   = process.env.APIFY_TOKEN;
   const actorId = process.env.APIFY_ACTOR_ID;
 
-  if (!token) throw new Error("APIFY_TOKEN is not set");
+  if (!token)   throw new Error("APIFY_TOKEN is not set");
   if (!actorId) throw new Error("APIFY_ACTOR_ID is not set");
 
   const client = new ApifyClient({ token });
+
+  // Build one URL per search and pass them all in a single actor run.
+  // Running once with multiple URLs is cheaper than one run per search.
+  const urls = LINKEDIN_SEARCHES.map((s) => ({
+    url: buildLinkedInUrl(s.keywords, s.location),
+  }));
+
+  let items: ApifyRawJob[];
+
+  try {
+    const run = await client.actor(actorId).call({
+      urls,
+      maxResults: 25, // per URL
+    });
+
+    const dataset = await client
+      .dataset(run.defaultDatasetId)
+      .listItems({ limit: 200 });
+
+    items = dataset.items as ApifyRawJob[];
+  } catch (err) {
+    throw err; // let the caller (fetch-jobs route) log and handle it
+  }
+
   let totalUpserted = 0;
 
-  for (const search of LINKEDIN_SEARCHES) {
-    let items: ApifyRawJob[];
+  for (const job of items) {
+    const externalId  = String(job.id ?? job.jobId ?? "");
+    const title       = job.title ?? job.position ?? "";
+    const company     = job.company ?? job.companyName ?? "";
+    const url         = job.url ?? job.link ?? job.jobUrl ?? "";
+    const description = job.description ?? job.jobDescription ?? null;
+    const postedAtRaw = job.postedAt ?? job.publishedAt ?? job.postedDate;
+    const location    = job.location ?? null;
 
-    try {
-      // .call() runs the actor and waits for it to finish.
-      // The input object is the standard LinkedIn scraper input shape.
-      const run = await client.actor(actorId).call({
-        keywords: search.keywords,
-        location: search.location,
-        maxResults: 25,
-        // Some actors use these alternative field names:
-        searchKeywords: search.keywords,
-        searchLocation: search.location,
-      });
+    if (!externalId || !title || !company || !url) continue;
 
-      const dataset = await client
-        .dataset(run.defaultDatasetId)
-        .listItems({ limit: 25 });
+    const postedAt = postedAtRaw ? new Date(postedAtRaw) : null;
+    const validPostedAt = postedAt && !isNaN(postedAt.getTime()) ? postedAt : null;
 
-      items = dataset.items as ApifyRawJob[];
-    } catch (err) {
-      console.error(
-        `Apify error for "${search.keywords}" in "${search.location}":`,
-        err
-      );
-      continue;
-    }
+    await prisma.job.upsert({
+      where: { externalId },
+      create:  { externalId, title, company, location, description, url, source: "APIFY", postedAt: validPostedAt },
+      update:  { title, company, location, description, url, postedAt: validPostedAt },
+    });
 
-    for (const job of items) {
-      // Normalize across different actor field name conventions
-      const externalId = String(job.id ?? job.jobId ?? "");
-      const title = job.title ?? job.position ?? "";
-      const company = job.company ?? job.companyName ?? "";
-      const url = job.url ?? job.link ?? job.jobUrl ?? "";
-      const description = job.description ?? job.jobDescription ?? null;
-      const postedAtRaw = job.postedAt ?? job.publishedAt ?? job.postedDate;
-      const location = job.location ?? null;
-
-      // Skip records missing the minimum required fields
-      if (!externalId || !title || !company || !url) continue;
-
-      const postedAt = postedAtRaw ? new Date(postedAtRaw) : null;
-      // If the date parse failed (NaN), treat as null
-      const validPostedAt =
-        postedAt && !isNaN(postedAt.getTime()) ? postedAt : null;
-
-      await prisma.job.upsert({
-        where: { externalId },
-        create: {
-          externalId,
-          title,
-          company,
-          location,
-          description,
-          url,
-          source: "APIFY",
-          postedAt: validPostedAt,
-        },
-        update: {
-          title,
-          company,
-          location,
-          description,
-          url,
-          postedAt: validPostedAt,
-        },
-      });
-
-      totalUpserted++;
-    }
+    totalUpserted++;
   }
 
   return totalUpserted;
