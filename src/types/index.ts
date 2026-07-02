@@ -16,6 +16,7 @@ export interface JobWithApplication {
   title: string;
   company: string;
   location: string | null;
+  region: string | null;
   description: string | null;
   url: string;
   source: JobSource;

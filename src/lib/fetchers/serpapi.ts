@@ -2,8 +2,13 @@
 //
 // Per CLAUDE.md Job Search Preferences:
 //   Keywords:  "blockchain developer", "full stack developer", "software engineer"
-//   Workplace: Remote only (chips: "work_from_home:1" — keeps "remote" out of
-//              the keyword so results aren't artificially narrowed by phrasing)
+//   Workplace: Remote only — appended as a keyword ("... remote"), not the
+//              `chips=work_from_home:1` filter. That chip was tested directly
+//              against SerpApi/Google Jobs and reliably returns zero results
+//              (confirmed 2026-07-02) — Google's chip values appear to be
+//              session-encoded tokens, and the plain "work_from_home:1" string
+//              isn't a stable substitute. Appending "remote" to the query text
+//              is less precise but actually returns results.
 //   Location:  United States — used as a proxy for the full international remote
 //              pool; Google Jobs returns almost nothing for Turkey-based queries
 //
@@ -12,7 +17,7 @@
 
 import { getJson } from "serpapi";
 import { prisma } from "@/lib/prisma";
-import { scoreJob } from "@/lib/scoring";
+import { scoreJob } from "@/lib/job-scorer";
 
 const QUERIES = [
   "blockchain developer",
@@ -42,9 +47,9 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
     try {
       const data = await getJson({
         engine: "google_jobs",
-        q: query,
+        q: `${query} remote`,
         location: "United States",
-        chips: "date_posted:today,work_from_home:1", // today + remote only
+        chips: "date_posted:today",
         // Note: Google Jobs has no exact "last 24h" filter. "date_posted:today"
         // means since midnight UTC — so a run at 07:00 UTC only sees 7 hours of
         // results. This is the closest Google Jobs supports. upsert means no
@@ -68,7 +73,10 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
 
       const postedAtRaw = job.detected_extensions?.posted_at;
       const postedAt = postedAtRaw ? parseSerpApiDate(postedAtRaw) : null;
-      const relevanceScore = scoreJob(job.title, job.description ?? null);
+      const { score: relevanceScore, blocked } = scoreJob(job.title, job.description ?? null, job.company_name);
+
+      // Blocked company or elimination-rule match — omit entirely, don't store.
+      if (blocked) continue;
 
       await prisma.job.upsert({
         where: { externalId: job.job_id },
@@ -77,6 +85,7 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
           title: job.title,
           company: job.company_name,
           location: job.location ?? null,
+          region: "Worldwide",
           description: job.description ?? null,
           url,
           source: "SERPAPI",
@@ -87,6 +96,7 @@ export async function fetchAndStoreSerpApiJobs(): Promise<number> {
           title: job.title,
           company: job.company_name,
           location: job.location ?? null,
+          region: "Worldwide",
           description: job.description ?? null,
           url,
           postedAt,

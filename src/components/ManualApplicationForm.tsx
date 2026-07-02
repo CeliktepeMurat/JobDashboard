@@ -24,18 +24,39 @@ const STATUS_OPTIONS: { value: ApplicationStatus; label: string }[] = [
 
 const inputClass = "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm";
 
+export interface EditableManualApplication {
+  id: string;
+  company: string;
+  role: string;
+  platform: string;
+  url: string | null;
+  status: ApplicationStatus;
+  appliedAt: string;
+  notes: string | null;
+}
+
 interface Props {
-  onCreated: (entry: unknown) => void;
+  editing?: EditableManualApplication | null;
+  onSaved: (entry: unknown) => void;
   onCancel: () => void;
 }
 
-export default function ManualApplicationForm({ onCreated, onCancel }: Props) {
+export default function ManualApplicationForm({ editing, onSaved, onCancel }: Props) {
   const today = new Date().toISOString().split("T")[0];
 
-  const [form, setForm] = useState<FormData>({
-    company: "", role: "", platform: "Indeed", url: "",
-    status: "APPLIED", appliedAt: today, notes: "",
-  });
+  const [form, setForm] = useState<FormData>(
+    editing
+      ? {
+          company: editing.company,
+          role: editing.role,
+          platform: editing.platform,
+          url: editing.url ?? "",
+          status: editing.status,
+          appliedAt: editing.appliedAt.split("T")[0],
+          notes: editing.notes ?? "",
+        }
+      : { company: "", role: "", platform: "Indeed", url: "", status: "APPLIED", appliedAt: today, notes: "" }
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
 
@@ -53,9 +74,10 @@ export default function ManualApplicationForm({ onCreated, onCancel }: Props) {
     setError(null);
     try {
       const res = await fetch("/api/manual-applications", {
-        method: "POST",
+        method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(editing ? { id: editing.id } : {}),
           ...form,
           url: form.url || undefined,
           notes: form.notes || undefined,
@@ -65,7 +87,7 @@ export default function ManualApplicationForm({ onCreated, onCancel }: Props) {
         const body = await res.json();
         throw new Error(body.error ?? "Failed to save");
       }
-      onCreated(await res.json());
+      onSaved(await res.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -75,7 +97,7 @@ export default function ManualApplicationForm({ onCreated, onCancel }: Props) {
 
   return (
     <form onSubmit={submit} className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4">
-      <h3 className="font-semibold text-slate-800">Add Manual Application</h3>
+      <h3 className="font-semibold text-slate-800">{editing ? "Edit Manual Application" : "Add Manual Application"}</h3>
 
       {error && (
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -130,7 +152,7 @@ export default function ManualApplicationForm({ onCreated, onCancel }: Props) {
           Cancel
         </button>
         <button type="submit" disabled={saving} className="text-sm px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Saving…" : editing ? "Save Changes" : "Save"}
         </button>
       </div>
     </form>

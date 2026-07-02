@@ -3,7 +3,47 @@ import { useEffect, useState } from "react";
 import type { ApplicationStatus } from "@/types";
 import StatusBadge from "@/components/StatusBadge";
 import StatusSelect from "@/components/StatusSelect";
-import ManualApplicationForm from "@/components/ManualApplicationForm";
+import ManualApplicationForm, { type EditableManualApplication } from "@/components/ManualApplicationForm";
+
+// Inline "click to edit" note field, shared by feed and manual application rows.
+function NotesEditor({ notes, onSave }: { notes: string | null; onSave: (notes: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue]     = useState(notes ?? "");
+  const [saving, setSaving]   = useState(false);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setValue(notes ?? ""); setEditing(true); }}
+        className="text-xs text-slate-400 hover:text-blue-500 mt-1 transition-colors text-left"
+      >
+        {notes || "+ Add note"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Add a note…"
+        className="text-xs border border-slate-200 rounded-md px-2 py-1 flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <button
+        disabled={saving}
+        onClick={async () => { setSaving(true); await onSave(value); setSaving(false); setEditing(false); }}
+        className="text-xs text-blue-600 hover:underline disabled:opacity-50 shrink-0"
+      >
+        Save
+      </button>
+      <button onClick={() => setEditing(false)} className="text-xs text-slate-400 hover:underline shrink-0">
+        Cancel
+      </button>
+    </div>
+  );
+}
 
 interface FeedApplication {
   id: string;
@@ -38,6 +78,7 @@ export default function TrackerPage() {
   const [manualApps, setManualApps] = useState<ManualApplication[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [showForm,   setShowForm]   = useState(false);
+  const [editingApp, setEditingApp] = useState<EditableManualApplication | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,9 +127,44 @@ export default function TrackerPage() {
     }
   }
 
-  function handleManualCreated(entry: unknown) {
-    setManualApps((prev) => [entry as ManualApplication, ...prev]);
+  async function updateFeedNotes(id: string, notes: string) {
+    const res = await fetch("/api/applications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, notes }),
+    });
+    if (!res.ok) return;
+    const updated = await res.json();
+    setFeedApps((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+  }
+
+  async function updateManualNotes(id: string, notes: string) {
+    const res = await fetch("/api/manual-applications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, notes }),
+    });
+    if (!res.ok) return;
+    const updated = await res.json();
+    setManualApps((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+  }
+
+  async function deleteManual(id: string) {
+    if (!confirm("Delete this manual application? This can't be undone.")) return;
+    const res = await fetch(`/api/manual-applications?id=${id}`, { method: "DELETE" });
+    if (!res.ok) return;
+    setManualApps((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  function handleManualSaved(entry: unknown) {
+    const saved = entry as ManualApplication;
+    setManualApps((prev) =>
+      prev.some((a) => a.id === saved.id)
+        ? prev.map((a) => (a.id === saved.id ? saved : a))
+        : [saved, ...prev]
+    );
     setShowForm(false);
+    setEditingApp(null);
   }
 
   const fmt = (d: string) =>
@@ -108,17 +184,18 @@ export default function TrackerPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => { setEditingApp(null); setShowForm((v) => !v); }}
           className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
         >
           + Add Manual Job
         </button>
       </div>
 
-      {showForm && (
+      {(showForm || editingApp) && (
         <ManualApplicationForm
-          onCreated={handleManualCreated}
-          onCancel={() => setShowForm(false)}
+          editing={editingApp}
+          onSaved={handleManualSaved}
+          onCancel={() => { setShowForm(false); setEditingApp(null); }}
         />
       )}
 
@@ -154,7 +231,7 @@ export default function TrackerPage() {
                   <span>·</span>
                   <span>Applied {fmt(app.appliedAt)}</span>
                 </div>
-                {app.notes && <p className="text-xs text-slate-400 mt-1">{app.notes}</p>}
+                <NotesEditor notes={app.notes} onSave={(n) => updateFeedNotes(app.id, n)} />
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <StatusBadge status={app.status} />
@@ -198,7 +275,7 @@ export default function TrackerPage() {
                     </a></>
                   )}
                 </div>
-                {app.notes && <p className="text-xs text-slate-400 mt-1">{app.notes}</p>}
+                <NotesEditor notes={app.notes} onSave={(n) => updateManualNotes(app.id, n)} />
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <StatusBadge status={app.status} />
@@ -207,6 +284,18 @@ export default function TrackerPage() {
                   onChange={(s) => updateManualStatus(app.id, s)}
                   disabled={updatingId === app.id}
                 />
+                <button
+                  onClick={() => { setShowForm(false); setEditingApp(app); }}
+                  className="text-xs text-slate-400 hover:text-blue-500 transition-colors"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => deleteManual(app.id)}
+                  className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}

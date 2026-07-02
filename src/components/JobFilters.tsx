@@ -7,11 +7,14 @@ export type SortOrder       = "newest" | "relevance";
 interface Props {
   keyword: string;
   source: SourceFilter;
+  region: string;
+  regionOptions: string[];
   appliedOnly: boolean;
   relevance: RelevanceFilter;
   sort: SortOrder;
   onKeyword:     (v: string) => void;
   onSource:      (v: SourceFilter) => void;
+  onRegion:      (v: string) => void;
   onAppliedOnly: (v: boolean) => void;
   onRelevance:   (v: RelevanceFilter) => void;
   onSort:        (v: SortOrder) => void;
@@ -38,8 +41,8 @@ const selectClass =
   "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer";
 
 export default function JobFilters({
-  keyword, source, appliedOnly, relevance, sort,
-  onKeyword, onSource, onAppliedOnly, onRelevance, onSort,
+  keyword, source, region, regionOptions, appliedOnly, relevance, sort,
+  onKeyword, onSource, onRegion, onAppliedOnly, onRelevance, onSort,
 }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -54,6 +57,13 @@ export default function JobFilters({
       <select value={source} onChange={(e) => onSource(e.target.value as SourceFilter)} className={selectClass}>
         {sourceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+
+      {regionOptions.length > 0 && (
+        <select value={region} onChange={(e) => onRegion(e.target.value)} className={selectClass}>
+          <option value="ALL">All locations</option>
+          {regionOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      )}
 
       <select value={relevance} onChange={(e) => onRelevance(e.target.value as RelevanceFilter)} className={selectClass}>
         {relevanceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

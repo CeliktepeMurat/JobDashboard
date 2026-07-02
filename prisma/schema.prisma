@@ -16,7 +16,8 @@ model Job {
   externalId  String   @unique // ID from the source API to avoid duplicates
   title       String
   company     String
-  location    String?
+  location    String? // actual scraped location text (city, "Remote", etc.)
+  region      String? // which search scope this job was fetched under, e.g. "Turkey" or "Worldwide" — used for filtering, not display
   description String?
   url         String
   source          JobSource
@@ -28,6 +29,7 @@ model Job {
 
   @@index([source])
   @@index([fetchedAt])
+  @@index([region])
 }
 
 // Represents a tracked application from the automated feed (linked to a Job)

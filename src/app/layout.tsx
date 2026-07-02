@@ -3,7 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
 export const metadata: Metadata = {
   title: "Job Dashboard",

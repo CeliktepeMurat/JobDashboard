@@ -37,6 +37,9 @@ export default function StatsPage() {
 
   if (!data) return null;
 
+  const statusTotal = data.byStatus.reduce((sum, row) => sum + row._count, 0) || 1;
+  const platformTotal = data.byPlatform.reduce((sum, row) => sum + row._count, 0) || 1;
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -64,7 +67,7 @@ export default function StatsPage() {
                     <div className="w-32 bg-slate-100 rounded-full h-1.5">
                       <div
                         className="bg-blue-500 h-1.5 rounded-full"
-                        style={{ width: `${Math.round((row._count / data.total) * 100)}%` }}
+                        style={{ width: `${Math.round((row._count / statusTotal) * 100)}%` }}
                       />
                     </div>
                     <span className="text-sm font-medium text-slate-600 w-4 text-right">{row._count}</span>
@@ -90,7 +93,7 @@ export default function StatsPage() {
                       <div className="w-32 bg-slate-100 rounded-full h-1.5">
                         <div
                           className="bg-blue-500 h-1.5 rounded-full"
-                          style={{ width: `${Math.round((row._count / data.total) * 100)}%` }}
+                          style={{ width: `${Math.round((row._count / platformTotal) * 100)}%` }}
                         />
                       </div>
                       <span className="text-sm font-medium text-slate-600 w-4 text-right">{row._count}</span>
